@@ -6,7 +6,7 @@ const { isValidObjectId } = require("mongoose");
 const isAdmin = (user) => String(user?.Role).toLowerCase() === "admin";
 
 const serverError = (res, error) =>
-  res.status(500).json({ message: "Server Error", error: error.message });
+res.status(500).json({ message: "Server Error", error: error.message });
 
 const Login = async (req, res) => {
   const { Email, Password } = req.body;
@@ -45,15 +45,15 @@ const Login = async (req, res) => {
 };
 
 const Signup = async (req, res) => {
-  const { Name, Email, Password, Number } = req.body;
+  const { Name, Email, Password, Number, Role, AdminCode } = req.body;
 
   if (!Name || !Email || !Password || !Number) {
     return res.status(400).json({ message: "Missing Required Field" });
   }
   if (String(Password).length < 6) {
     return res
-      .status(400)
-      .json({ message: "Password must be at least 6 characters" });
+    .status(400)
+    .json({ message: "Password must be at least 6 characters" });
   }
 
   try {
@@ -62,12 +62,22 @@ const Signup = async (req, res) => {
       return res.status(409).json({ message: "User Already Exists" });
     }
 
-    // Role is never taken from the request: everyone signs up as "user".
-    // To make an admin, change Role to "admin" directly in MongoDB.
+    // Anyone can pick "user". Picking "admin" needs the secret code that is
+    // stored in the ADMIN_SIGNUP_CODE environment variable (never in the code).
+    let role = "user";
+    if (String(Role).toLowerCase() === "admin") {
+      const secret = process.env.ADMIN_SIGNUP_CODE;
+      if (!secret || AdminCode !== secret) {
+        return res.status(403).json({ message: "Invalid admin code" });
+      }
+      role = "admin";
+    }
+
     await User.create({
       Name,
       Email,
       Number,
+      Role: role,
       Password: await hash(Password, 12),
     });
 
